@@ -444,30 +444,46 @@ def download(url, referer, path, anime, title, number,args):
         
 def subtitles(response, session, args, anime, number, title):
     anime = clean_name(anime)
-    if "tracks" in response:
-        for track in response['tracks']:
-            try:
-                logging.info(f"Track Found: {track.get('label')} ({track.get('kind')})")
-                if args.subtitle_lang.lower() in track.get('label').lower():
-                    logging.info(f"Track: {track.get('label')} ({track.get('kind')})")
-                    if track.get('file'):
-                        logging.info(f"Track URL: {track.get('file')}")
-                        label = track["label"]
-                        language_name = label.split()[0]
-                        code = Language.find(language_name).language
-                        if not os.path.exists(f"{args.path}/{anime}/{anime} E{number} {title}.{code}.vtt"):
-                            logging.info(f"Downloading subtitles for E{number} {title} {track.get('label')}")
-                            s_r = session.get(track.get('file'),headers={
-                                "referer": "https://megaplay.buzz/",
-                            })
-                            if s_r.status_code == 200:
-                                logging.info(f"{args.path}/{anime}/{anime} E{number} {title}.{code}.vtt")
-                                if not os.path.exists(f"{args.path}/{anime}/"):
-                                    os.makedirs(f"{args.path}/{anime}/")
-                                with open(f"{args.path}/{anime}/{anime} E{number} {title}.{code}.vtt", 'wb') as f:
-                                    f.write(s_r.content)
-            except:
-                logging.info(format_exc())       
+
+    for track in response.get('tracks', []):
+        try:
+            label = track.get('label') or ''
+            url = track.get('file')
+            logging.info(f"Track Found: {label} ({track.get('kind')})")
+
+            if 'forced' in label.lower():
+                logging.info(f"Skipping forced track: {label}")
+                continue
+
+            if args.subtitle_lang.lower() not in label.lower():
+                continue
+
+            if not url:
+                continue
+
+            logging.info(f"Track: {label} ({track.get('kind')})")
+            logging.info(f"Track URL: {url}")
+
+            code = Language.find(label.split()[0]).language
+            folder = f"{args.path}/{anime}"
+            filepath = f"{folder}/{anime} E{number} {title}.{code}.vtt"
+
+            if os.path.exists(filepath):
+                continue
+
+            logging.info(f"Downloading subtitles for E{number} {title} {label}")
+            s_r = session.get(url, headers={"referer": "https://megaplay.buzz/"})
+
+            if s_r.status_code != 200:
+                continue
+
+            logging.info(filepath)
+            os.makedirs(folder, exist_ok=True)
+            with open(filepath, 'wb') as f:
+                f.write(s_r.content)
+
+        except Exception:
+            logging.info(format_exc())
                     
             # else:
             #     logging.warning(f"Track Request Error{s_r.text}")
